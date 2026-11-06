@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1060" height="570" viewBox="0 0 1060 570" role="img" aria-labelledby="title desc" font-family="-apple-system, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif">
+  <title id="title">Run Store job states</title>
+  <desc id="desc">Six job states and the functions that move a job between them. queued goes to running when a worker calls claim(), if ready_at has passed and attempts are left. queued goes to cancelled through cancel_queued() or request_stop(). running goes back to queued through finish(retry=True) after an infrastructure failure, if attempts are left and nobody requested a stop. running goes to succeeded or failed through finish(). running goes to quarantined through expire() when the lease expires, or through finish() with the outcome quarantined. quarantined goes back to running when reconcile() calls adopt_quarantined(), if the manager has a free slot and the attempt payload is readable. succeeded, failed and cancelled are terminal.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10Z" fill="#3A5047"/>
+    </marker>
+    <style>
+      .title { font-size: 24px; font-weight: 700; fill: #2F443E; }
+      .lead { font-size: 14px; fill: #63766F; }
+      .state { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace; font-size: 18px; font-weight: 700; fill: #2F443E; text-anchor: middle; }
+      .note { font-size: 13px; fill: #63766F; text-anchor: middle; }
+      .fn { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace; font-size: 14px; fill: #2F443E; }
+      .cond { font-size: 13px; fill: #63766F; }
+      .edge { fill: none; stroke: #3A5047; stroke-width: 2; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect x="1" y="1" width="1058" height="568" rx="16" fill="#FFFDF6" stroke="#E5E2D2" stroke-width="2"/>
+  <text class="title" x="40" y="50">Run Store job states</text>
+  <text class="lead" x="40" y="78">Each arrow is one transition. Monospace names the function that makes it. Plain text gives the condition.</text>
+
+  <!-- States -->
+  <rect x="40" y="190" width="180" height="72" rx="12" fill="#E6F1F7" stroke="#587E96" stroke-width="2"/>
+  <text class="state" x="130" y="222">queued</text>
+  <text class="note" x="130" y="246">waits for ready_at</text>
+
+  <rect x="470" y="190" width="180" height="72" rx="12" fill="#E6F1F7" stroke="#587E96" stroke-width="2"/>
+  <text class="state" x="560" y="222">running</text>
+  <text class="note" x="560" y="246">holds a lease</text>
+
+  <rect x="470" y="420" width="180" height="72" rx="12" fill="#FFE7A9" stroke="#B28745" stroke-width="2"/>
+  <text class="state" x="560" y="452">quarantined</text>
+  <text class="note" x="560" y="476">waits for reconciliation</text>
+
+  <rect x="850" y="110" width="170" height="64" rx="12" fill="#DFF0DB" stroke="#256348" stroke-width="2"/>
+  <text class="state" x="935" y="139">succeeded</text>
+  <text class="note" x="935" y="161">terminal</text>
+
+  <rect x="850" y="250" width="170" height="64" rx="12" fill="#FBE3DC" stroke="#BC7168" stroke-width="2"/>
+  <text class="state" x="935" y="279">failed</text>
+  <text class="note" x="935" y="301">terminal</text>
+
+  <rect x="40" y="420" width="180" height="64" rx="12" fill="#E4E3D4" stroke="#63766F" stroke-width="2"/>
+  <text class="state" x="130" y="449">cancelled</text>
+  <text class="note" x="130" y="471">terminal</text>
+
+  <!-- queued -> running -->
+  <path class="edge" d="M220 212 H468"/>
+  <text class="fn" x="345" y="180" text-anchor="middle">claim()</text>
+  <text class="cond" x="345" y="200" text-anchor="middle">ready_at passed, attempts left</text>
+
+  <!-- running -> queued -->
+  <path class="edge" d="M470 242 H222"/>
+  <text class="fn" x="345" y="266" text-anchor="middle">finish(retry=True)</text>
+  <text class="cond" x="345" y="284" text-anchor="middle">infrastructure failure,</text>
+  <text class="cond" x="345" y="300" text-anchor="middle">attempts left, no stop request</text>
+
+  <!-- queued -> cancelled -->
+  <path class="edge" d="M130 262 V418"/>
+  <text class="fn" x="144" y="334">cancel_queued()</text>
+  <text class="fn" x="144" y="354">request_stop()</text>
+  <text class="cond" x="144" y="372">cancel or stop request</text>
+
+  <!-- running -> quarantined -->
+  <path class="edge" d="M530 262 V418"/>
+  <text class="fn" x="518" y="314" text-anchor="end">expire()</text>
+  <text class="cond" x="518" y="332" text-anchor="end">lease expired</text>
+  <text class="fn" x="518" y="362" text-anchor="end">finish()</text>
+  <text class="cond" x="518" y="380" text-anchor="end">outcome quarantined</text>
+
+  <!-- quarantined -> running -->
+  <path class="edge" d="M590 420 V264"/>
+  <text class="fn" x="602" y="314">reconcile()</text>
+  <text class="fn" x="602" y="332">adopt_quarantined()</text>
+  <text class="cond" x="602" y="350">free slot, payload readable</text>
+
+  <!-- running -> succeeded / failed -->
+  <path class="edge" d="M650 226 H750 V142 H848"/>
+  <path class="edge" d="M750 226 V282 H848"/>
+  <text class="fn" x="700" y="216" text-anchor="middle">finish()</text>
+
+  <text class="cond" x="40" y="540">Source: the job methods in src/sprout/runstore/</text>
+</svg>

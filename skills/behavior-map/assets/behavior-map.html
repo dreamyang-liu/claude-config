@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Behavior map</title>
+<!-- Template of the behavior-map skill. Edit only the JSON in <script id="model">. -->
+<style>
+:root {
+  --bg: #FFFDF6; --bg-line: #E5E2D2; --text: #2F443E; --text2: #63766F; --arrow: #3A5047;
+  --comp-fill: #E6F1F7; --comp-line: #587E96;
+  --ok-fill: #DFF0DB; --ok-line: #256348;
+  --warn-fill: #FFE7A9; --warn-line: #B28745;
+  --bad-fill: #FBE3DC; --bad-line: #BC7168;
+  --off-fill: #E4E3D4; --off-line: #63766F;
+  --accent: #278065;
+  --sans: 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', -apple-system, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+}
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+body { margin: 0; padding: 24px 32px 48px; color: var(--text); font: 14px/1.45 var(--sans); }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 17px; margin: 32px 0 6px; border-bottom: 1px solid var(--bg-line); padding-bottom: 4px; }
+h3 { font-size: 14px; margin: 22px 0 6px; }
+code, .mono { font-family: var(--mono); font-size: 12px; }
+.sub { color: var(--text2); }
+.lead { color: var(--text2); margin: 4px 0 10px; }
+#check-report { margin: 14px 0 0; padding: 10px 14px; border: 1px solid; border-radius: 6px;
+  font: 13px/1.5 var(--mono); white-space: pre-wrap; }
+#check-report.ok { background: var(--ok-fill); border-color: var(--ok-line); }
+#check-report.bad { background: var(--bad-fill); border-color: var(--bad-line); }
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.tab { border: 1px solid var(--bg-line); background: #fff; border-radius: 6px; padding: 8px 12px;
+  cursor: pointer; text-align: left; font: inherit; color: inherit; max-width: 380px; }
+.tab.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.tab .actor { display: block; color: var(--text2); font-size: 12px; }
+dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px; margin: 12px 0 0; }
+dl.facts dt { color: var(--text2); }
+dl.facts dd { margin: 0; }
+.crumbs { margin: 4px 0 6px; }
+.crumbs button { border: none; background: none; padding: 0; font: inherit; color: var(--accent);
+  cursor: pointer; text-decoration: underline; }
+.crumbs .here { font-weight: 600; }
+.lanes-wrap { overflow-x: auto; padding-bottom: 6px; }
+.lanes { position: relative; display: grid; column-gap: 14px; min-width: min-content; }
+.group { margin-bottom: 6px; padding: 3px 8px; border: 1px dashed var(--comp-line); border-radius: 6px;
+  text-align: center; font-weight: 600; cursor: zoom-out; }
+.lane-head { padding: 6px 8px; border: 1px solid var(--comp-line); background: var(--comp-fill);
+  border-radius: 6px; text-align: center; font-weight: 600; }
+.lane-head .mono { display: block; font-weight: normal; color: var(--text2); overflow-wrap: anywhere; }
+.lane-head.zoomable { cursor: zoom-in; }
+.lane-head.zoomable::after { content: " +"; color: var(--accent); }
+.lane-head.focused { box-shadow: 0 0 0 2px var(--accent); }
+.lane-head.unalloc { background: var(--bad-fill); border-color: var(--bad-line); }
+.lane-head.actor { background: #fff; border: 2px solid var(--accent); }
+.lane-bg { background: rgba(230, 241, 247, 0.35); border-radius: 0 0 6px 6px; }
+.step { position: relative; z-index: 1; margin: 44px 6px 0; padding: 6px 9px; background: #fff;
+  border: 1px solid var(--arrow); border-radius: 6px; }
+.step.ghost { border-style: dashed; background: var(--bg); color: var(--text2); }
+.step.end { border: 2px solid var(--accent); }
+.step .tag { color: var(--accent); font-weight: 700; white-space: nowrap; }
+.step.end .line { display: block; }
+.step.end .tag { display: block; }
+.step .line { display: flex; gap: 6px; }
+.step .line + .line { margin-top: 4px; }
+.step .num { font-weight: 700; color: var(--accent); white-space: nowrap; }
+.step .meta { margin-left: 18px; color: var(--text2); font: 11px/1.3 var(--mono); overflow-wrap: anywhere; }
+.badge { display: inline-block; margin-left: 5px; padding: 0 6px; border: 1px solid; border-radius: 9px;
+  font-size: 11px; font-weight: normal; vertical-align: 1px; }
+.badge.new { background: var(--ok-fill); border-color: var(--ok-line); }
+.badge.changed { background: var(--warn-fill); border-color: var(--warn-line); }
+.badge.removed { background: var(--off-fill); border-color: var(--off-line); }
+.badge.untraced { background: var(--bad-fill); border-color: var(--bad-line); }
+svg.wires { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; z-index: 0; }
+.wire { fill: none; stroke: var(--arrow); stroke-width: 1.4; }
+.wire.dashed { stroke-dasharray: 5 4; }
+.wire-label { position: absolute; z-index: 2; padding: 0 4px; background: var(--bg); color: var(--text2);
+  font: 11px/1.3 var(--mono); white-space: nowrap; }
+.wire-label.across { transform: translate(-50%, -100%); }
+.wire-label.down { transform: translate(0, -50%); }
+ul.tree { list-style: none; margin: 0; padding-left: 20px; }
+ul.tree.root { padding-left: 0; }
+ul.tree li { margin: 3px 0; }
+.tree .node { cursor: pointer; font-weight: 600; }
+.tree .node.focused { color: var(--accent); text-decoration: underline; }
+.tree .count { color: var(--text2); margin-left: 6px; }
+table.matrix { border-collapse: collapse; }
+table.matrix th, table.matrix td { border: 1px solid var(--bg-line); padding: 4px 9px; text-align: center; }
+table.matrix th.empty { background: var(--bad-fill); }
+table.matrix tr.active td { background: #fff; }
+table.matrix td:first-child { text-align: left; cursor: pointer; }
+footer { margin-top: 32px; color: var(--text2); font-size: 12px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position: absolute">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#3A5047"/>
+    </marker>
+  </defs>
+</svg>
+
+<header>
+  <h1 id="title"></h1>
+  <div id="question" class="sub"></div>
+  <pre id="check-report"></pre>
+</header>
+
+<h2>Behaviors</h2>
+<div class="lead">Each behavior is a goal of a real actor. Select one to see where its steps are handled.</div>
+<div id="tabs" class="tabs"></div>
+<dl id="facts" class="facts"></dl>
+
+<h2>Allocation</h2>
+<div class="lead">Read from top to bottom. The first column is the actor: the trigger at the top, the outcome
+  at the bottom, and each step that the actor does. Each other column is a component at the current zoom. Each box is one or
+  more steps in order. Each arrow hands control to the next step, labeled with the call or the message.
+  Click a column head with + to show its subcomponents. Click a dashed group head to hide them.</div>
+<div id="crumbs" class="crumbs"></div>
+<div id="scenarios"></div>
+
+<h2>Components</h2>
+<div class="lead">Each component, with the number of steps that it or its subcomponents handle. Click a name to zoom to it.</div>
+<div id="tree"></div>
+
+<h2>Trace matrix</h2>
+<div class="lead">The step numbers that each component handles, at the current zoom. A red column has no step.</div>
+<div class="lanes-wrap"><table id="matrix" class="matrix"></table></div>
+
+<footer id="footer"></footer>
+
+<script type="application/json" id="model">
+{
+  "title": "Run Store: submit a rollout, then branch it",
+  "question": "Example map. It shows which component handles each step when an experiment script submits a rollout and later branches it.",
+  "drawn_from": "docs/RUNSTORE.md (Submit and observe, Branch, Boundaries), README.md (Layout) and src/sprout/worker/jobs/rollout.py, as of 2026-10-16",
+  "components": [
+    {"id": "runstore", "name": "Run Store", "code": "src/sprout/runstore/", "children": [
+      {"id": "runstore.api", "name": "HTTP API", "code": "src/sprout/runstore/api.py"},
+      {"id": "runstore.store", "name": "job queue", "code": "src/sprout/runstore/store.py"}
+    ]},
+    {"id": "worker", "name": "Worker", "code": "src/sprout/worker/", "children": [
+      {"id": "worker.manager", "name": "claims and supervision", "code": "src/sprout/worker/manager.py, attempts.py"},
+      {"id": "worker.jobs", "name": "attempt process", "code": "src/sprout/worker/jobs/rollout.py"},
+      {"id": "worker.run", "name": "run orchestrator", "code": "src/sprout/worker/run/runner.py"},
+      {"id": "worker.sandbox", "name": "sandbox session", "code": "src/sprout/worker/sandbox/"},
+      {"id": "worker.agents", "name": "mini-swe-agent", "code": "src/sprout/worker/agents/mini_swe/"},
+      {"id": "worker.gateway", "name": "model gateway", "code": "src/sprout/worker/gateway/"},
+      {"id": "worker.checkpoint", "name": "checkpoints", "code": "src/sprout/worker/checkpoint/"}
+    ]},
+    {"id": "sandbox", "name": "sandbox client", "code": "src/sprout_sandbox/"},
+    {"id": "runtime", "name": "Go runtime", "code": "runtime/"},
+    {"id": "model", "name": "model endpoint", "code": "external, docs/MODEL_ENDPOINTS.md"}
+  ],
+  "behaviors": [
+    {
+      "id": "submit",
+      "actor": "experiment script (sprout.runstore.client.Client)",
+      "goal": "Run one task as a rollout and get its result",
+      "trigger": "The script has a task prompt and a prepared sandbox image.",
+      "outcome": "The script holds the job's result: finished, failed or quarantined.",
+      "source": "docs/RUNSTORE.md, Submit and observe",
+      "steps": [
+        {"id": "accept", "owner": "runstore.api", "message": "POST /v1/jobs + Idempotency-Key", "text": "accepts the rollout job and returns its ID (202)"},
+        {"id": "queue", "owner": "runstore.store", "message": "insert", "text": "stores the job as queued in PostgreSQL"},
+        {"id": "claim", "owner": "worker.manager", "message": "FOR UPDATE SKIP LOCKED", "text": "claims the job and starts an attempt child process"},
+        {"id": "attempt", "owner": "worker.jobs", "message": "spawn", "text": "runs the attempt in isolation, with no database credentials"},
+        {"id": "orchestrate", "owner": "worker.run", "message": "Orchestrator", "text": "runs the mini-swe-agent slot"},
+        {"id": "open", "owner": "worker.sandbox", "message": "open session", "text": "opens a sandbox on the backend that the profile names"},
+        {"id": "create", "owner": "sandbox", "message": "podman", "text": "creates a rootless container on a btrfs subvolume"},
+        {"id": "ask", "owner": "worker.agents", "message": "turn", "text": "asks the model for the next action"},
+        {"id": "route", "owner": "worker.gateway", "message": "chat request", "text": "routes the request within the budget"},
+        {"id": "answer", "owner": "model", "message": "HTTP", "text": "returns the next message with tool calls"},
+        {"id": "tools", "owner": "runtime", "message": "JSON-RPC", "text": "runs each tool call inside the sandbox"},
+        {"id": "snapshot", "owner": "worker.checkpoint", "message": "turn closed", "text": "takes a snapshot of the turn. Steps 8 to 12 repeat until the agent stops"},
+        {"id": "reap", "owner": "worker.manager", "message": "attempt exits", "text": "checks that each sandbox of the attempt is gone, and records the result"},
+        {"id": "wait", "owner": "runstore.api", "message": "client.wait(job_id)", "text": "returns the result"}
+      ],
+      "extensions": [
+        {"at": "reap", "condition": "a sandbox cannot be shown to be gone", "outcome": "The script gets the job in the quarantined state.", "steps": [
+          {"owner": "worker.manager", "message": "reap fails", "text": "quarantines the attempt"},
+          {"owner": "runstore.api", "message": "client.wait(job_id)", "text": "returns the quarantined job"}
+        ]}
+      ]
+    },
+    {
+      "id": "branch",
+      "actor": "experiment script (sprout.runstore.client.Client)",
+      "goal": "Continue a rollout from one of its recovery points",
+      "trigger": "A rollout went wrong after a known turn.",
+      "outcome": "A new branch job runs from that turn's snapshot and history.",
+      "source": "docs/RUNSTORE.md, Branch; src/sprout/worker/jobs/rollout.py",
+      "steps": [
+        {"owner": "runstore.api", "message": "GET /v1/jobs/{id}/recovery-points", "text": "lists the recovery points. available rechecks the prefix checksum and the snapshot"},
+        {"owner": "actor", "message": "recovery points", "text": "picks an available point after the turn that went wrong"},
+        {"owner": "runstore.api", "message": "POST /v1/jobs/{id}/branch", "text": "accepts a branch from point_id, with a continuation"},
+        {"owner": "runstore.store", "message": "insert", "text": "queues the branch as a new job with the parent's profile, slot, prompt and tools"},
+        {"owner": "worker.manager", "message": "FOR UPDATE SKIP LOCKED", "text": "claims the branch job and starts an attempt child process"},
+        {"owner": "worker.jobs", "message": "spawn", "text": "loads the native prefix, applies the continuation, and uses the point's snapshot as the sandbox image"},
+        {"owner": "worker.run", "message": "Orchestrator", "text": "runs the agent from the restored history, as in steps 5 to 12 of the first behavior"}
+      ]
+    }
+  ]
+}
+</script>
+
+<script>
+'use strict';
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const STATUSES = new Set(['existing', 'new', 'changed', 'removed']);
+const ACTOR = 'actor';  // the owner of a step that the actor does; not a component id
+const model = JSON.parse(document.getElementById('model').textContent);
+const behaviors = model.behaviors || [];
+const comps = new Map();
+const problems = [];
+
+function el(tag, attrs, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === 'onclick') n.onclick = v; else n.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k != null && k !== false) n.append(k instanceof Node ? k : String(k));
+  return n;
+}
+
+function statusBadge(status) {
+  return status && status !== 'existing' ? el('span', { class: 'badge ' + status }, status) : null;
+}
+
+// --- the model and its checks ------------------------------------------------
+
+function indexComponents(list, parent) {
+  for (const c of list || []) {
+    if (!c.id || !c.name) { problems.push(`a component has no id or no name: ${JSON.stringify(c).slice(0, 80)}`); continue; }
+    if (comps.has(c.id)) problems.push(`component "${c.id}" is defined twice`);
+    if (c.id === ACTOR) problems.push('"actor" is reserved for the steps that the actor does. Rename the component');
+    if (c.status && !STATUSES.has(c.status)) problems.push(`component "${c.id}": unknown status "${c.status}"`);
+    comps.set(c.id, { c, parent });
+    indexComponents(c.children, c.id);
+  }
+}
+
+// The component IDs from the top level down to id, or [] for an unknown id.
+function ancestry(id) {
+  const out = [];
+  while (id && comps.has(id)) { out.unshift(id); id = comps.get(id).parent; }
+  return out;
+}
+
+function hasChildren(id) {
+  const n = comps.get(id);
+  return !!(n && n.c.children && n.c.children.length);
+}
+
+function buildScenarios(b) {
+  const main = (b.steps || []).map((s, i) => ({ ...s, num: String(i + 1) }));
+  b.scenarios = [{ label: 'Main scenario', trigger: b.trigger, outcome: b.outcome, steps: main }];
+  const byId = new Map(main.filter(s => s.id).map(s => [s.id, s]));
+  const letters = new Map();
+  for (const x of b.extensions || []) {
+    const at = byId.get(x.at);
+    if (!at) { problems.push(`behavior "${b.id}": the extension "${x.condition}" is at the unknown step "${x.at}"`); continue; }
+    const n = letters.get(x.at) || 0;
+    letters.set(x.at, n + 1);
+    const tag = at.num + String.fromCharCode(97 + n);
+    const steps = (x.steps || []).map((s, i) => ({ ...s, num: tag + (i + 1) }));
+    b.scenarios.push({ label: `Extension ${tag}: ${x.condition}`, at, condition: x.condition, outcome: x.outcome, steps });
+  }
+}
+
+function checkBehavior(b) {
+  for (const f of ['id', 'actor', 'goal', 'trigger', 'outcome', 'source']) {
+    if (!b[f]) problems.push(`behavior "${b.id || '?'}": no ${f}` +
+      (f === 'source' ? '. Name the user statement, the doc or the code path that shows this behavior' : ''));
+  }
+  if (!(b.steps || []).length) problems.push(`behavior "${b.id}": no steps`);
+  const seen = new Set();
+  for (const sc of b.scenarios) for (const s of sc.steps) {
+    const where = `behavior "${b.id}", step ${s.num}`;
+    if (s.id && seen.has(s.id)) problems.push(`${where}: the step id "${s.id}" is used twice`);
+    if (s.id) seen.add(s.id);
+    if (!s.text) problems.push(`${where}: no text`);
+    if (!s.owner) problems.push(`${where}: no owner. Allocate it to one component, or to "actor"`);
+    else if (s.owner === ACTOR) { /* the actor does this step */ }
+    else if (!comps.has(s.owner)) problems.push(`${where}: the owner "${s.owner}" is not a component`);
+    else if (hasChildren(s.owner)) problems.push(`${where}: the owner "${s.owner}" has subcomponents. Allocate the step to one of them`);
+    if (s.status && !STATUSES.has(s.status)) problems.push(`${where}: unknown status "${s.status}"`);
+  }
+}
+
+indexComponents(model.components, null);
+const behaviorIds = new Set();
+for (const b of behaviors) {
+  if (behaviorIds.has(b.id)) problems.push(`behavior "${b.id}" is defined twice`);
+  behaviorIds.add(b.id);
+  buildScenarios(b);
+  checkBehavior(b);
+}
+const allSteps = behaviors.flatMap(b => b.scenarios.flatMap(sc => sc.steps.map(s => ({ b, s }))));
+const traced = new Map();
+for (const { s } of allSteps) for (const id of ancestry(s.owner)) traced.set(id, (traced.get(id) || 0) + 1);
+for (const [id, n] of comps) {
+  if (!traced.get(id) && n.c.status !== 'removed') {
+    problems.push(`component "${id}" is not traced to any behavior step. Find the behavior that needs it, or remove it`);
+  }
+}
+
+function renderReport() {
+  const pre = document.getElementById('check-report');
+  if (problems.length) {
+    pre.className = 'bad';
+    pre.textContent = `PROBLEMS: ${problems.length}\n` + problems.map(p => '- ' + p).join('\n');
+  } else {
+    pre.className = 'ok';
+    pre.textContent = `OK: ${behaviors.length} behaviors, ${allSteps.length} steps, ${comps.size} components. ` +
+      'Each step has one owner, and each component is traced to a step.';
+  }
+}
+
+// --- view state, kept in the URL hash: #behavior=<id>&focus=<component id> ---
+
+const state = { behavior: behaviors.length ? behaviors[0].id : null, focus: null };
+
+function readHash() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  if (behaviorIds.has(p.get('behavior'))) state.behavior = p.get('behavior');
+  state.focus = comps.has(p.get('focus')) ? p.get('focus') : null;
+}
+
+function setState(patch) {
+  Object.assign(state, patch);
+  const p = new URLSearchParams();
+  if (state.behavior) p.set('behavior', state.behavior);
+  if (state.focus) p.set('focus', state.focus);
+  history.replaceState(null, '', '#' + p.toString());
+  render();
+}
+
+// --- lanes: the components at the current zoom -------------------------------
+
+// Expands the focus and its ancestors into their children. A step whose owner has no lane
+// (an unknown owner, or a component that is expanded) gets a red "not allocated" lane.
+function computeLanes() {
+  const expanded = new Set(state.focus ? ancestry(state.focus) : []);
+  const lanes = [{ id: ACTOR, actor: true, c: { name: 'actor' } }];
+  (function walk(list) {
+    for (const c of list || []) {
+      if (expanded.has(c.id) && hasChildren(c.id)) walk(c.children);
+      else lanes.push({ id: c.id, c });
+    }
+  })(model.components);
+  const laneOf = new Map();
+  for (const { s } of allSteps) {
+    if (s.owner === ACTOR) { laneOf.set(s, 0); continue; }
+    const ids = ancestry(s.owner);
+    let k = -1;
+    for (let i = ids.length - 1; i >= 0 && k < 0; i--) k = lanes.findIndex(l => l.id === ids[i]);
+    if (k < 0) {
+      const key = '!' + (s.owner || '');
+      k = lanes.findIndex(l => l.id === key);
+      if (k < 0) {
+        const name = (comps.has(s.owner) ? comps.get(s.owner).c.name : s.owner || 'no owner') + ' (not allocated)';
+        let at = lanes.length;
+        for (let i = 0; i < lanes.length; i++) if (ancestry(lanes[i].id).includes(s.owner)) at = i + 1;
+        lanes.splice(at, 0, { id: key, unalloc: true, owner: s.owner, c: { name } });
+        for (const [step, lane] of laneOf) if (lane >= at) laneOf.set(step, lane + 1);
+        k = at;
+      }
+    }
+    laneOf.set(s, k);
+  }
+  const chain = [...expanded].filter(hasChildren);
+  return { lanes, laneOf, chain };
+}
+
+function laneMembers(lanes, groupId) {
+  const idx = [];
+  lanes.forEach((l, i) => {
+    const id = l.unalloc ? l.owner : l.id;
+    if (ancestry(id).includes(groupId)) idx.push(i);
+  });
+  return idx;
+}
+
+// --- rendering ----------------------------------------------------------------
+
+function renderTabs() {
+  const tabs = document.getElementById('tabs');
+  tabs.replaceChildren(...behaviors.map(b => el('button', {
+    class: 'tab' + (b.id === state.behavior ? ' active' : ''), onclick: () => setState({ behavior: b.id }),
+  }, el('span', { class: 'actor' }, b.actor), b.goal)));
+  const b = behaviors.find(x => x.id === state.behavior);
+  const facts = document.getElementById('facts');
+  facts.replaceChildren();
+  if (!b) return;
+  for (const [k, v] of [['Actor', b.actor], ['Goal', b.goal], ['Trigger', b.trigger], ['Outcome', b.outcome], ['Source', b.source]]) {
+    facts.append(el('dt', {}, k), el('dd', {}, v || '(missing)'));
+  }
+}
+
+function renderCrumbs() {
+  const crumbs = document.getElementById('crumbs');
+  const parts = [el('span', {}, 'Zoom: ')];
+  const path = state.focus ? ancestry(state.focus) : [];
+  parts.push(path.length ? el('button', { onclick: () => setState({ focus: null }) }, 'top level') : el('span', { class: 'here' }, 'top level'));
+  path.forEach((id, i) => {
+    parts.push(' > ');
+    const name = comps.get(id).c.name;
+    parts.push(i === path.length - 1 ? el('span', { class: 'here' }, name) : el('button', { onclick: () => setState({ focus: id }) }, name));
+  });
+  crumbs.replaceChildren(...parts);
+}
+
+function renderScenario(sc, view) {
+  const { lanes, laneOf, chain } = view;
+  const grid = el('div', { class: 'lanes' });
+  grid.style.gridTemplateColumns = `repeat(${lanes.length}, minmax(140px, 1fr))`;
+  let row = 1;
+  for (const g of chain) {
+    const idx = laneMembers(lanes, g);
+    const head = el('div', { class: 'group', title: 'Click to hide the subcomponents' }, comps.get(g).c.name);
+    head.style.gridRow = row;
+    head.style.gridColumn = `${Math.min(...idx) + 1} / ${Math.max(...idx) + 2}`;
+    head.onclick = () => setState({ focus: comps.get(g).parent });
+    grid.append(head);
+    row++;
+  }
+  lanes.forEach((l, i) => {
+    const zoomable = !l.unalloc && !l.actor && hasChildren(l.id);
+    const head = l.actor
+      ? el('div', { class: 'lane-head actor' }, 'actor', el('span', { class: 'mono' }, view.actor || ''))
+      : el('div', {
+        class: 'lane-head' + (l.unalloc ? ' unalloc' : '') + (zoomable ? ' zoomable' : '') + (l.id === state.focus ? ' focused' : ''),
+      }, l.c.name, statusBadge(l.c.status), l.c.code ? el('span', { class: 'mono' }, l.c.code) : null);
+    head.style.gridRow = row;
+    head.style.gridColumn = i + 1;
+    if (zoomable) { head.title = 'Click to show the subcomponents'; head.onclick = () => setState({ focus: l.id }); }
+    grid.append(head);
+  });
+  row++;
+
+  // Consecutive steps in one lane share one box. The first step's message labels the arrow into it.
+  const boxes = [];
+  if (sc.trigger) boxes.push({ lane: 0, end: true, lines: [{ tag: 'trigger', text: sc.trigger }] });
+  if (sc.at) boxes.push({ lane: laneOf.get(sc.at), ghost: true, lines: [{ text: `after step ${sc.at.num}: ${sc.condition}` }] });
+  for (const s of sc.steps) {
+    const lane = laneOf.get(s);
+    const last = boxes[boxes.length - 1];
+    if (last && !last.ghost && !last.end && last.lane === lane) last.lines.push(s);
+    else boxes.push({ lane, lines: [s], message: s.message });
+  }
+  if (sc.outcome) boxes.push({ lane: 0, end: true, lines: [{ tag: 'outcome', text: sc.outcome }] });
+  lanes.forEach((_, i) => {
+    const bg = el('div', { class: 'lane-bg' });
+    bg.style.gridRow = `${row} / ${row + Math.max(boxes.length, 1)}`;
+    bg.style.gridColumn = i + 1;
+    grid.append(bg);
+  });
+  boxes.forEach((bx, i) => {
+    const node = el('div', { class: 'step' + (bx.ghost ? ' ghost' : '') + (bx.end ? ' end' : '') });
+    bx.lines.forEach((s, j) => {
+      node.append(el('div', { class: 'line' }, s.num ? el('span', { class: 'num' }, s.num) : null,
+        s.tag ? el('span', { class: 'tag' }, s.tag) : null,
+        el('span', {}, s.text, statusBadge(s.status))));
+      const meta = [];
+      if (j > 0 && s.message) meta.push(s.message);
+      if (s.owner && lanes[bx.lane].id !== s.owner && comps.has(s.owner)) meta.push('in ' + comps.get(s.owner).c.name);
+      if (meta.length) node.append(el('div', { class: 'meta' }, meta.join('  |  ')));
+    });
+    node.style.gridRow = row + i;
+    node.style.gridColumn = bx.lane + 1;
+    grid.append(node);
+    bx.node = node;
+  });
+  grid._wires = boxes.slice(1).map((bx, i) => ({ from: boxes[i].node, to: bx.node, label: bx.message || '', dashed: !!boxes[i].ghost }));
+  return [el('h3', {}, sc.label), el('div', { class: 'lanes-wrap' }, grid)];
+}
+
+function drawWires(grid) {
+  grid.querySelectorAll('svg.wires, .wire-label').forEach(n => n.remove());
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('class', 'wires');
+  svg.setAttribute('width', grid.scrollWidth);
+  svg.setAttribute('height', grid.scrollHeight);
+  for (const w of grid._wires || []) {
+    const a = w.from, b = w.to;
+    const x1 = a.offsetLeft + a.offsetWidth / 2, y1 = a.offsetTop + a.offsetHeight;
+    const x2 = b.offsetLeft + b.offsetWidth / 2, y2 = b.offsetTop;
+    const my = y2 - 22;
+    const same = Math.abs(x1 - x2) < 1;
+    const path = document.createElementNS(SVG_NS, 'path');
+    path.setAttribute('d', same ? `M${x1},${y1} V${y2 - 1}` : `M${x1},${y1} V${my} H${x2} V${y2 - 1}`);
+    path.setAttribute('class', 'wire' + (w.dashed ? ' dashed' : ''));
+    path.setAttribute('marker-end', 'url(#arrowhead)');
+    svg.append(path);
+    if (w.label) {
+      const label = el('div', { class: 'wire-label ' + (same ? 'down' : 'across') }, w.label);
+      label.style.left = (same ? x2 + 8 : (x1 + x2) / 2) + 'px';
+      label.style.top = (same ? my : my - 1) + 'px';
+      grid.append(label);
+    }
+  }
+  grid.prepend(svg);
+}
+
+function renderTree(list, root) {
+  const ul = el('ul', { class: 'tree' + (root ? ' root' : '') });
+  for (const c of list || []) {
+    const n = traced.get(c.id) || 0;
+    const li = el('li', {},
+      el('span', { class: 'node' + (state.focus === c.id ? ' focused' : ''), onclick: () => setState({ focus: c.id }) }, c.name),
+      ' ', el('code', {}, c.id), statusBadge(c.status),
+      c.code ? el('span', { class: 'sub mono' }, '  ' + c.code) : null,
+      n ? el('span', { class: 'count' }, `${n} step${n > 1 ? 's' : ''}`) : el('span', { class: 'badge untraced' }, 'untraced'));
+    if (c.children && c.children.length) li.append(renderTree(c.children, false));
+    ul.append(li);
+  }
+  return ul;
+}
+
+function renderMatrix(view) {
+  const { lanes, laneOf } = view;
+  const cells = behaviors.map(() => lanes.map(() => []));
+  behaviors.forEach((b, bi) => b.scenarios.forEach(sc => sc.steps.forEach(s => cells[bi][laneOf.get(s)].push(s.num))));
+  const used = lanes.map((l, li) => l.actor || cells.some(r => r[li].length));
+  const head = el('tr', {}, el('th', {}, 'Behavior'),
+    lanes.map((l, li) => el('th', used[li] ? {} : { class: 'empty' }, l.c.name, used[li] ? null : el('div', { class: 'sub' }, 'no step'))));
+  const rows = behaviors.map((b, bi) => el('tr', { class: b.id === state.behavior ? 'active' : '' },
+    el('td', { onclick: () => setState({ behavior: b.id }) }, b.goal),
+    cells[bi].map(nums => el('td', { class: 'mono' }, nums.join(', ')))));
+  document.getElementById('matrix').replaceChildren(head, ...rows);
+}
+
+function render() {
+  renderTabs();
+  renderCrumbs();
+  const b = behaviors.find(x => x.id === state.behavior);
+  const view = { ...computeLanes(), actor: b ? b.actor : '' };
+  const box = document.getElementById('scenarios');
+  box.replaceChildren(...(b ? b.scenarios.flatMap(sc => renderScenario(sc, view)) : []));
+  box.querySelectorAll('.lanes').forEach(drawWires);
+  document.getElementById('tree').replaceChildren(renderTree(model.components, true));
+  renderMatrix(view);
+}
+
+document.getElementById('title').textContent = model.title || 'Behavior map';
+document.getElementById('question').textContent = model.question || '';
+document.getElementById('footer').textContent = 'Drawn from: ' + (model.drawn_from || '(missing)');
+if (!model.drawn_from) problems.push('the model has no drawn_from. Name the sources of the map');
+renderReport();
+readHash();
+render();
+window.addEventListener('hashchange', () => { readHash(); render(); });
+window.addEventListener('resize', () => document.querySelectorAll('.lanes').forEach(drawWires));
+if (document.fonts) document.fonts.ready.then(() => document.querySelectorAll('.lanes').forEach(drawWires));
+</script>
+</body>
+</html>
