@@ -19,3 +19,7 @@ Apply the two standards below to all text that you write. This includes replies 
 For Chinese text, use the mapping in `~/.claude/skills/nasa-writing/references/chinese.md`. The STE100 structural rules apply to Chinese: short sentences, active voice, one topic for each sentence, and no semicolons. The STE100 word rules apply only to English.
 
 Exception: do not apply these standards to creative text or marketing text.
+
+# Git
+
+- Do not add Claude as a co-author to a commit. Do not write a `Co-Authored-By: Claude` line in a commit message. This rule overrides the default attribution instructions.

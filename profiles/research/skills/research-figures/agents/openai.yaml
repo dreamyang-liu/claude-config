@@ -1,0 +1,4 @@
+interface:
+  display_name: "Research Figures"
+  short_description: "Paper and project figures: clear information hierarchy, restrained cartoon elements, vector production, and iteration checks"
+  default_prompt: "Use $research-figures to draw or improve a research figure from the paper or the existing draft. Keep the semantics accurate, and output an editable vector figure and a preview."
