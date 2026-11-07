@@ -31,14 +31,56 @@ type Event struct {
 type Options struct {
 	// Force moves a real file or directory aside when a link needs its place.
 	Force bool
+	// Keep leaves a real file or directory in place and skips that skill.
+	Keep bool
+}
+
+// Conflicts lists the skills among names whose place in the scope is taken by
+// a real file or directory, not a symlink. Install refuses to run while such
+// a conflict exists, unless Options.Force or Options.Keep says what to do.
+func (r *Repo) Conflicts(s Scope, names []string) ([]string, error) {
+	profiles, skills, err := r.Resolve(names)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range profiles {
+		for i := range p.Skills {
+			skills = append(skills, &p.Skills[i])
+		}
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, sk := range skills {
+		if seen[sk.Name] {
+			continue
+		}
+		seen[sk.Name] = true
+		fi, err := os.Lstat(filepath.Join(s.SkillsDir, sk.Name))
+		if err == nil && fi.Mode()&os.ModeSymlink == 0 {
+			out = append(out, sk.Name)
+		}
+	}
+	return out, nil
 }
 
 // Install links the skills of each named profile and skill into the scope and
-// imports each profile's CLAUDE.md. Names are profiles or skills.
+// imports each profile's CLAUDE.md. Names are profiles or skills. It changes
+// nothing when a real file or directory is in the way and Options says
+// neither Force nor Keep.
 func (r *Repo) Install(s Scope, names []string, opt Options) ([]Event, error) {
 	profiles, skills, err := r.Resolve(names)
 	if err != nil {
 		return nil, err
+	}
+	if !opt.Force && !opt.Keep {
+		conflicts, err := r.Conflicts(s, names)
+		if err != nil {
+			return nil, err
+		}
+		if len(conflicts) > 0 {
+			return nil, fmt.Errorf("%s already holds a real directory for: %s\n  --force moves them to %s and links the skills\n  --keep  leaves them alone and links only the others",
+				s.Rel(s.SkillsDir), strings.Join(conflicts, ", "), s.Rel(s.BackupDir))
+		}
 	}
 	home, _ := os.UserHomeDir()
 	md, err := readClaudeMD(s.ClaudeMD)
@@ -51,7 +93,7 @@ func (r *Repo) Install(s Scope, names []string, opt Options) ([]Event, error) {
 	}
 	for _, p := range profiles {
 		for i := range p.Skills {
-			ev, err := linkSkill(s, &p.Skills[i], opt.Force)
+			ev, err := linkSkill(s, &p.Skills[i], opt)
 			if err != nil {
 				return events, err
 			}
@@ -65,7 +107,7 @@ func (r *Repo) Install(s Scope, names []string, opt Options) ([]Event, error) {
 		}
 	}
 	for _, sk := range skills {
-		ev, err := linkSkill(s, sk, opt.Force)
+		ev, err := linkSkill(s, sk, opt)
 		if err != nil {
 			return events, err
 		}

@@ -21,6 +21,17 @@ type flags struct {
 	global  bool
 	project string
 	force   bool
+	keep    bool
+}
+
+func (f *flags) options() ccfg.Options {
+	return ccfg.Options{Force: f.force, Keep: f.keep}
+}
+
+func addConflictFlags(cmd *cobra.Command, f *flags) {
+	cmd.Flags().BoolVar(&f.force, "force", false, "move a real file or directory aside (into the scope's backups) when a link needs its place")
+	cmd.Flags().BoolVar(&f.keep, "keep", false, "leave a real file or directory in place and skip that skill")
+	cmd.MarkFlagsMutuallyExclusive("force", "keep")
 }
 
 func main() {
@@ -166,12 +177,12 @@ Examples:
 				}
 			}
 			title(cmd.OutOrStdout(), "install into "+s.String())
-			events, err := r.Install(s, names, ccfg.Options{Force: f.force})
+			events, err := r.Install(s, names, f.options())
 			printEvents(cmd.OutOrStdout(), events)
 			return err
 		},
 	}
-	cmd.Flags().BoolVar(&f.force, "force", false, "move a real file or directory aside when a link needs its place")
+	addConflictFlags(cmd, f)
 	return cmd
 }
 
@@ -229,12 +240,12 @@ func switchCmd(f *flags) *cobra.Command {
 				}
 			}
 			title(cmd.OutOrStdout(), "switch "+s.String()+" to "+name)
-			events, err := r.Switch(s, name, ccfg.Options{Force: f.force})
+			events, err := r.Switch(s, name, f.options())
 			printEvents(cmd.OutOrStdout(), events)
 			return err
 		},
 	}
-	cmd.Flags().BoolVar(&f.force, "force", false, "move a real file or directory aside when a link needs its place")
+	addConflictFlags(cmd, f)
 	return cmd
 }
 

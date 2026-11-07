@@ -23,6 +23,8 @@ type setupPlan struct {
 	project       *ccfg.Scope
 	profiles      []string // non-common profiles the project should have
 	skills        []string // extra skills for the project
+	conflicts     []string // skills whose place a real directory takes
+	options       ccfg.Options
 	gitignore     bool
 	pathLink      string // where to link the binary, "" for none
 }
@@ -184,17 +186,45 @@ func askProject(plan *setupPlan, f *flags, form formFunc) error {
 		return err
 	}
 
-	skillOpts := extraSkillOptions(plan, st)
-	if len(skillOpts) == 0 {
+	if skillOpts := extraSkillOptions(plan, st); len(skillOpts) > 0 {
+		if err := form(huh.NewMultiSelect[string]().
+			Title("Extra skills for the project").
+			Description("Skills outside the selected profiles. Already linked ones are preselected.").
+			Options(skillOpts...).
+			Filterable(true).
+			Height(12).
+			Value(&plan.skills)); err != nil {
+			return err
+		}
+	}
+	return askConflicts(plan, form)
+}
+
+// askConflicts asks what to do with a real directory that sits where a link
+// must go, for example a skill that was copied into the project by hand.
+func askConflicts(plan *setupPlan, form formFunc) error {
+	names := append(append([]string{}, plan.profiles...), plan.skills...)
+	conflicts, err := plan.repo.Conflicts(*plan.project, names)
+	if err != nil {
+		return err
+	}
+	plan.conflicts = conflicts
+	if len(conflicts) == 0 {
 		return nil
 	}
-	return form(huh.NewMultiSelect[string]().
-		Title("Extra skills for the project").
-		Description("Skills outside the selected profiles. Already linked ones are preselected.").
-		Options(skillOpts...).
-		Filterable(true).
-		Height(12).
-		Value(&plan.skills))
+	choice := "force"
+	if err := form(huh.NewSelect[string]().
+		Title("Real directories already exist for: "+strings.Join(conflicts, ", ")).
+		Description("They are copies, not links. ccfg can replace them with links or leave them alone.").
+		Options(
+			huh.NewOption("Replace with links; move the originals to "+plan.project.Rel(plan.project.BackupDir), "force"),
+			huh.NewOption("Keep the directories; link only the other skills", "keep"),
+		).
+		Value(&choice)); err != nil {
+		return err
+	}
+	plan.options = ccfg.Options{Force: choice == "force", Keep: choice == "keep"}
+	return nil
 }
 
 // extraSkillOptions lists the skills that the selected profiles do not cover.
@@ -300,6 +330,13 @@ func printPlan(w io.Writer, plan *setupPlan) {
 		if len(plan.skills) > 0 {
 			fmt.Fprintf(w, "    skills     %s\n", styAccent.Render(strings.Join(plan.skills, ", ")))
 		}
+		if len(plan.conflicts) > 0 {
+			what := "keep the existing directories, link the rest"
+			if plan.options.Force {
+				what = "move the existing directories to " + plan.project.Rel(plan.project.BackupDir) + ", then link"
+			}
+			fmt.Fprintf(w, "    existing   %s %s\n", styWarn.Render(strings.Join(plan.conflicts, ", ")), styDim.Render(what))
+		}
 		if plan.gitignore {
 			fmt.Fprintf(w, "    .gitignore add .claude/skills/\n")
 		}
@@ -371,7 +408,7 @@ func applyProject(w io.Writer, plan *setupPlan) error {
 	}
 	names := append(append([]string{}, plan.profiles...), plan.skills...)
 	if len(names) > 0 {
-		events, err := plan.repo.Install(s, names, ccfg.Options{})
+		events, err := plan.repo.Install(s, names, plan.options)
 		printEvents(w, events)
 		if err != nil {
 			return err

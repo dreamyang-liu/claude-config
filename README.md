@@ -80,7 +80,7 @@ engineering 的 7 个 skill 来自 SPROUT 仓库的 `.claude/skills/`。`researc
 | `ccfg setup` | 交互式配置：仓库位置、全局 `common`、一个项目的 profile 和额外 skill、`.gitignore`、把 `ccfg` 链接到 PATH。最后显示计划，确认后才改动。`--accessible` 用纯文本提示。 |
 | `ccfg status` | 每个作用域装了哪些 profile 和 skill。无 `-g`/`-p` 时同时显示全局和当前项目。 |
 | `ccfg list` | 仓库提供的 profile 和 skill，带描述。`-v` 显示完整描述。 |
-| `ccfg install <名字>...` | 安装 profile 或单个 skill。无参数时交互选择。`--force` 把占位的真实文件移到备份目录。 |
+| `ccfg install <名字>...` | 安装 profile 或单个 skill。无参数时交互选择。目标位置已有真实目录（不是链接）时，不做任何改动并列出它们：`--force` 把它们移到 `.claude/backups/` 再链接，`--keep` 跳过它们只链接其余的。 |
 | `ccfg uninstall <名字>...` | 卸载。另一个已装 profile 还在用的 skill 会保留。`--all` 清掉该作用域里指向本仓库的一切。 |
 | `ccfg switch <profile>` | 让该 profile 成为作用域里唯一的 profile。`common` 不受影响。无参数时交互选择。 |
 | `ccfg doctor` | 找出坏链接、块外的 import 行、旧版 `install.sh` 留下的 `CLAUDE.md` 符号链接。`--fix` 修复。 |

@@ -308,6 +308,53 @@ func TestInstallMovesALooseImportIntoTheBlock(t *testing.T) {
 	}
 }
 
+func TestInstallWithAConflictChangesNothingAndNamesTheDirectory(t *testing.T) {
+	r := fakeRepo(t)
+	s := projectScope(t)
+	mustMkdir(t, filepath.Join(s.SkillsDir, "shared"))
+
+	events, err := r.Install(s, []string{"eng"}, Options{})
+
+	if err == nil || !strings.Contains(err.Error(), "shared") {
+		t.Fatalf("err = %v, want an error that names shared", err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("events = %+v, want none", events)
+	}
+	if _, err := os.Lstat(filepath.Join(s.SkillsDir, "tdd")); !os.IsNotExist(err) {
+		t.Fatalf("tdd was linked although the install failed")
+	}
+	if _, err := os.Stat(s.ClaudeMD); !os.IsNotExist(err) {
+		t.Fatalf("CLAUDE.md was written although the install failed")
+	}
+	conflicts, _ := r.Conflicts(s, []string{"eng"})
+	if strings.Join(conflicts, ",") != "shared" {
+		t.Fatalf("conflicts = %v, want [shared]", conflicts)
+	}
+}
+
+func TestInstallWithKeepSkipsTheDirectoryAndLinksTheRest(t *testing.T) {
+	r := fakeRepo(t)
+	s := projectScope(t)
+	mustMkdir(t, filepath.Join(s.SkillsDir, "shared"))
+
+	events, err := r.Install(s, []string{"eng"}, Options{Keep: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if countVerb(events, "skipped") != 1 || countVerb(events, "linked") != 1 || countVerb(events, "imported") != 1 {
+		t.Fatalf("events = %+v", events)
+	}
+	fi, err := os.Lstat(filepath.Join(s.SkillsDir, "shared"))
+	if err != nil || fi.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("the shared directory was replaced")
+	}
+	if got := state(t, r, s, "eng"); got != "partial" {
+		t.Fatalf("eng state = %q, want partial", got)
+	}
+}
+
 func TestInstallRefusesToClobberARealDirectoryWithoutForce(t *testing.T) {
 	r := fakeRepo(t)
 	s := projectScope(t)

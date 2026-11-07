@@ -56,9 +56,9 @@ func (r *Repo) scanLinks(s Scope) ([]Link, error) {
 
 // linkSkill creates <SkillsDir>/<name> -> skill.Path. An existing link to the
 // same target is kept. An existing link to another target is replaced. A real
-// file or directory is moved to the backup directory when force is set, and is
-// an error otherwise.
-func linkSkill(s Scope, sk *Skill, force bool) (Event, error) {
+// file or directory is moved to the backup directory with opt.Force, left in
+// place and skipped with opt.Keep, and an error otherwise.
+func linkSkill(s Scope, sk *Skill, opt Options) (Event, error) {
 	dst := filepath.Join(s.SkillsDir, sk.Name)
 	if err := os.MkdirAll(s.SkillsDir, 0o755); err != nil {
 		return Event{}, err
@@ -72,11 +72,15 @@ func linkSkill(s Scope, sk *Skill, force bool) (Event, error) {
 				return Event{}, err
 			}
 		} else {
-			if !force {
-				return Event{}, fmt.Errorf("%s exists and is not a symlink; use --force to move it to %s", dst, s.BackupDir)
-			}
-			if _, err := moveToBackup(s, dst); err != nil {
-				return Event{}, err
+			switch {
+			case opt.Force:
+				if _, err := moveToBackup(s, dst); err != nil {
+					return Event{}, err
+				}
+			case opt.Keep:
+				return Event{Level: Warn, Verb: "skipped", Subject: sk.Name, Detail: s.Rel(dst) + " is a real directory, not a link; --force replaces it"}, nil
+			default:
+				return Event{}, fmt.Errorf("%s exists and is not a symlink; use --force to move it to %s, or --keep to skip it", dst, s.BackupDir)
 			}
 		}
 	}
