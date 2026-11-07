@@ -2,10 +2,10 @@
 
 统一管理 Claude Code 的全局说明和自写 skill。配置分两层：
 
-- **通用层**：每个会话都加载。链接到 `~/.claude`。
-- **profile 层**：按项目类型加载。链接到各项目的 `.claude/skills/`，并在项目的 `CLAUDE.md` 里引入 profile 的规则。
+- **通用层**：每个会话都加载。装到 `~/.claude`。
+- **profile 层**：按项目类型加载。装到各项目的 `.claude/skills/`，并在项目的 `CLAUDE.md` 里引入 profile 的规则。
 
-`~/.claude` 和项目里的对应位置都是指向本仓库的符号链接。
+skill 以符号链接装入，CLAUDE.md 以 `@import` 行引入。命令行工具 `ccfg` 负责安装、切换、卸载和检查。
 
 ## 通用层
 
@@ -51,40 +51,63 @@ engineering 的 7 个 skill 来自 SPROUT 仓库的 `.claude/skills/`。`researc
 
 一个 skill 只放一份真目录。几个 profile 共用一个 skill 时，在其他 profile 的 `skills/` 下放相对符号链接指向它，例如 `ln -s ../../engineering/skills/testing profiles/research/skills/testing`。相对链接可以提交到 git。
 
-## 安装
+## ccfg：安装和管理工具
 
-### 通用层（新机器一次）
+`ccfg` 是本仓库的命令行工具（Go，源码在 `cmd/ccfg/` 和 `internal/ccfg/`）。它把 skill 链接到一个作用域的 skills 目录，并在该作用域的 `CLAUDE.md` 里维护一段 `@import` 块：
+
+```markdown
+<!-- ccfg:begin -->
+@~/Projects/claude-config/CLAUDE.md
+@~/Projects/claude-config/profiles/engineering/CLAUDE.md
+<!-- ccfg:end -->
+```
+
+块外的文字是你自己的，`ccfg` 不改动。所有状态都从文件系统推导：链接指向哪里、块里有哪些行。没有状态文件。
+
+### 作用域
+
+| 作用域 | 选项 | CLAUDE.md | skills 目录 |
+|---|---|---|---|
+| 全局 | `-g` / `--global` | `~/.claude/CLAUDE.md` | `~/.claude/skills/` |
+| 项目 | `-p DIR` / `--project DIR`，默认当前目录 | `DIR/CLAUDE.md` | `DIR/.claude/skills/` |
+
+`common` 是通用层对应的 profile（仓库根目录的 `CLAUDE.md` 和 `skills/`）。全局作用域装 `common`，项目作用域装项目类型的 profile。
+
+### 命令
+
+| 命令 | 作用 |
+|---|---|
+| `ccfg status` | 每个作用域装了哪些 profile 和 skill。无 `-g`/`-p` 时同时显示全局和当前项目。 |
+| `ccfg list` | 仓库提供的 profile 和 skill，带描述。`-v` 显示完整描述。 |
+| `ccfg install <名字>...` | 安装 profile 或单个 skill。无参数时交互选择。`--force` 把占位的真实文件移到备份目录。 |
+| `ccfg uninstall <名字>...` | 卸载。另一个已装 profile 还在用的 skill 会保留。`--all` 清掉该作用域里指向本仓库的一切。 |
+| `ccfg switch <profile>` | 让该 profile 成为作用域里唯一的 profile。`common` 不受影响。无参数时交互选择。 |
+| `ccfg doctor` | 找出坏链接、块外的 import 行、旧版 `install.sh` 留下的 `CLAUDE.md` 符号链接。`--fix` 修复。 |
+
+仓库位置按这个顺序找：`--repo`、环境变量 `CLAUDE_CONFIG_REPO`、二进制文件所在的仓库、`~/Projects/claude-config`。
+
+### 新机器
 
 ```bash
+brew install go
 git clone https://github.com/dreamyang-liu/claude-config ~/Projects/claude-config
-~/Projects/claude-config/install.sh
+~/Projects/claude-config/install.sh          # 构建 bin/ccfg，然后 ccfg install common --global
+ln -s ~/Projects/claude-config/bin/ccfg /usr/local/bin/ccfg
 ```
 
-### profile（每个项目一次）
+### 每个项目
 
 ```bash
-~/Projects/claude-config/install.sh engineering ~/Projects/my-service
-~/Projects/claude-config/install.sh research ~/Projects/my-paper
+cd ~/Projects/my-service && ccfg install engineering
+ccfg install research -p ~/Projects/my-paper
+ccfg switch writing -p ~/Projects/my-paper
 ```
 
-一个项目可以装多个 profile。`install.sh <profile> <项目>` 做三件事：
-
-1. 把 `profiles/<profile>/skills/` 下的每个 skill 链接到 `<项目>/.claude/skills/<skill>`。
-2. 在 `<项目>/CLAUDE.md` 末尾加一行 `@~/Projects/claude-config/profiles/<profile>/CLAUDE.md`。已有这一行时不重复加。
-3. 项目是 git 仓库而 `.gitignore` 没有排除 `.claude/skills/` 时，打印提示。链接里是本机的绝对路径，不要提交到项目仓库。
-
-### 重复运行
-
-`install.sh` 可以重复运行：
-
-- 目标已经是符号链接时，替换它。
-- 目标是实际文件或目录时，先移到 `~/.claude/backups/claude-config-<时间>/`，再创建链接。备份不在 `~/.claude/skills` 下，所以不会被当成 skill 加载。
-- 指向本仓库、但目标已不存在的链接会被删除。skill 从通用层移到 profile 后，重新运行 `install.sh` 即可清掉旧链接。
-- `skills/` 和 `profiles/*/skills/` 下新增的目录会自动链接。
+项目是 git 仓库而 `.gitignore` 没有排除 `.claude/skills/` 时，`ccfg` 会提示。链接里是本机的绝对路径，不要提交到项目仓库。
 
 ## 修改
 
-直接改本仓库中的文件，然后提交。因为各处都是链接，修改立即生效。新开一个 Claude Code 会话即可读到新内容。
+直接改本仓库中的文件，然后提交。skill 是链接，CLAUDE.md 是 `@import`，修改立即生效。新开一个 Claude Code 会话即可读到新内容。
 
 新增一个 skill 时，先决定它属于通用层还是某个 profile，再放到对应的 `skills/` 目录。新增一个 profile 时，建目录 `profiles/<名字>/`，放一个 `CLAUDE.md` 和一个 `skills/` 目录。
 
@@ -106,8 +129,5 @@ git commit -m "Update asd-ste100 to upstream $(git rev-parse --short ste100-upst
 ## 测试
 
 ```bash
-sh -n install.sh
-for s in skills/*/scripts/*-lint.py profiles/*/skills/*/scripts/*-lint.py profiles/*/skills/*/scripts/svg-check.py; do
-    python3 "$s" --selftest
-done
+make test    # gofmt、go vet、go test，以及每个 lint 脚本的 --selftest
 ```
