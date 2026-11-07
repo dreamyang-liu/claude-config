@@ -42,15 +42,16 @@ type Repo struct {
 }
 
 // FindRepo locates the repository. It tries, in order: the explicit path, the
-// CLAUDE_CONFIG_REPO environment variable, each parent of the running binary,
-// and ~/Projects/claude-config.
+// CLAUDE_CONFIG_REPO environment variable, the path recorded in
+// ~/.config/ccfg/repo, each parent of the running binary, and
+// ~/Projects/claude-config.
 func FindRepo(explicit string) (*Repo, error) {
 	for _, c := range repoCandidates(explicit) {
 		if isRepo(c) {
 			return LoadRepo(c)
 		}
 	}
-	return nil, fmt.Errorf("no claude-config repository found; pass --repo or set CLAUDE_CONFIG_REPO")
+	return nil, fmt.Errorf("no claude-config repository found; pass --repo, set CLAUDE_CONFIG_REPO, or write the path to ~/.config/ccfg/repo")
 }
 
 func repoCandidates(explicit string) []string {
@@ -60,6 +61,13 @@ func repoCandidates(explicit string) []string {
 	}
 	if env := os.Getenv("CLAUDE_CONFIG_REPO"); env != "" {
 		out = append(out, env)
+	}
+	if conf, err := os.UserConfigDir(); err == nil {
+		if data, err := os.ReadFile(filepath.Join(conf, "ccfg", "repo")); err == nil {
+			if p := strings.TrimSpace(string(data)); p != "" {
+				out = append(out, p)
+			}
+		}
 	}
 	if exe, err := os.Executable(); err == nil {
 		if real, err := filepath.EvalSymlinks(exe); err == nil {

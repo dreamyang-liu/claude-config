@@ -85,17 +85,35 @@ engineering 的 7 个 skill 来自 SPROUT 仓库的 `.claude/skills/`。`researc
 | `ccfg switch <profile>` | 让该 profile 成为作用域里唯一的 profile。`common` 不受影响。无参数时交互选择。 |
 | `ccfg doctor` | 找出坏链接、块外的 import 行、旧版 `install.sh` 留下的 `CLAUDE.md` 符号链接。`--fix` 修复。 |
 
-仓库位置按这个顺序找：`--repo`、环境变量 `CLAUDE_CONFIG_REPO`、二进制文件所在的仓库、`~/Projects/claude-config`。
+仓库位置按这个顺序找：`--repo`、环境变量 `CLAUDE_CONFIG_REPO`、`~/.config/ccfg/repo` 里记录的路径、二进制文件所在的仓库、`~/Projects/claude-config`。
 
-### 新机器
+### 新机器：一条命令
 
 ```bash
-brew install go
-git clone https://github.com/dreamyang-liu/claude-config ~/Projects/claude-config
-~/Projects/claude-config/install.sh          # 构建 bin/ccfg，然后运行 ccfg setup
+curl -fsSL https://raw.githubusercontent.com/dreamyang-liu/claude-config/main/install.sh | sh
 ```
 
+`install.sh` 做四件事：
+
+1. 从 [GitHub Releases](https://github.com/dreamyang-liu/claude-config/releases) 下载当前平台的 `ccfg`（macOS 和 Linux，arm64 和 amd64），校验 sha256，装到 PATH 上第一个可写的目录（`/opt/homebrew/bin`、`/usr/local/bin`、`~/.local/bin`、`~/bin`）。
+2. 没有仓库时 `git clone` 到 `~/Projects/claude-config`。
+3. 在终端里时启动 `ccfg setup`。
+4. 仓库不在默认位置时，把路径写到 `~/.config/ccfg/repo`，之后 `ccfg` 自动读取。
+
+环境变量：`CLAUDE_CONFIG_REPO` 仓库位置，`CCFG_BIN_DIR` 二进制位置，`CCFG_VERSION` 指定版本，`CCFG_NO_SETUP=1` 只安装不进入 setup。
+
 `setup` 会问：是否全局安装 `common`、要不要配置一个项目、项目选哪些 profile 和额外 skill、是否改 `.gitignore`、是否把 `ccfg` 链接到 PATH 上的目录。
+
+从源码构建：仓库里 `make build`（需要 Go），产物在 `bin/ccfg`。
+
+### 发布新版本
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+`.github/workflows/release.yml` 在 tag 推送后构建 4 个平台的二进制，生成 `checksums.txt`，创建 GitHub Release。`ccfg --version` 显示 tag 名。
 
 ### 每个项目
 

@@ -42,7 +42,7 @@ New here? Run "ccfg setup" for a guided walk-through.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.PersistentFlags().StringVar(&f.repo, "repo", "", "path of the claude-config repository (default: $CLAUDE_CONFIG_REPO, the binary's repo, ~/Projects/claude-config)")
+	root.PersistentFlags().StringVar(&f.repo, "repo", "", "path of the claude-config repository (default: $CLAUDE_CONFIG_REPO, ~/.config/ccfg/repo, the binary's repo, ~/Projects/claude-config)")
 	root.PersistentFlags().BoolVarP(&f.global, "global", "g", false, "use the global scope ~/.claude")
 	root.PersistentFlags().StringVarP(&f.project, "project", "p", "", "use the project at DIR (default: current directory)")
 
