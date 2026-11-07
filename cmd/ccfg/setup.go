@@ -362,6 +362,13 @@ func applyProject(w io.Writer, plan *setupPlan) error {
 			return err
 		}
 	}
+	// The .gitignore line goes first, so that Install does not print its hint.
+	if plan.gitignore {
+		if err := appendGitignore(s.Dir); err != nil {
+			return err
+		}
+		fmt.Fprintf(w, "%s added %s\n", icon(ccfg.OK), styAccent.Render(".claude/skills/ to .gitignore"))
+	}
 	names := append(append([]string{}, plan.profiles...), plan.skills...)
 	if len(names) > 0 {
 		events, err := plan.repo.Install(s, names, ccfg.Options{})
@@ -369,12 +376,6 @@ func applyProject(w io.Writer, plan *setupPlan) error {
 		if err != nil {
 			return err
 		}
-	}
-	if plan.gitignore {
-		if err := appendGitignore(s.Dir); err != nil {
-			return err
-		}
-		fmt.Fprintf(w, "%s added %s\n", icon(ccfg.OK), styAccent.Render(".claude/skills/ to .gitignore"))
 	}
 	return nil
 }
