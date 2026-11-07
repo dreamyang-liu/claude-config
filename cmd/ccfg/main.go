@@ -5,8 +5,10 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"sort"
+	"time"
 
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
@@ -22,6 +24,47 @@ type flags struct {
 	project string
 	force   bool
 	keep    bool
+	noSync  bool
+}
+
+// syncTimeout bounds the fetch that runs before install, switch and setup, so
+// that an offline machine waits a few seconds and then continues.
+const syncTimeout = 8 * time.Second
+
+// autoSync fast-forwards the clone before an operation, unless --no-sync is
+// set. It prints only changes and warnings. When the clone moved, it reloads
+// the repository so that new skills and profiles are seen.
+func autoSync(f *flags, r *ccfg.Repo, w io.Writer) *ccfg.Repo {
+	if f.noSync {
+		return r
+	}
+	events, err := r.Update(syncTimeout)
+	if errors.Is(err, ccfg.ErrNotGit) {
+		return r
+	}
+	if err != nil {
+		fmt.Fprintf(w, "%s sync: %v\n", icon(ccfg.Warn), err)
+		return r
+	}
+	printEvents(w, withoutInfo(events))
+	for _, e := range events {
+		if e.Verb == "updated" {
+			if fresh, err := ccfg.LoadRepo(r.Root); err == nil {
+				return fresh
+			}
+		}
+	}
+	return r
+}
+
+func withoutInfo(events []ccfg.Event) []ccfg.Event {
+	var out []ccfg.Event
+	for _, e := range events {
+		if e.Level != ccfg.Info {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 func (f *flags) options() ccfg.Options {
@@ -56,9 +99,11 @@ New here? Run "ccfg setup" for a guided walk-through.`,
 	root.PersistentFlags().StringVar(&f.repo, "repo", "", "path of the claude-config repository (default: $CLAUDE_CONFIG_REPO, ~/.config/ccfg/repo, the binary's repo, ~/Projects/claude-config)")
 	root.PersistentFlags().BoolVarP(&f.global, "global", "g", false, "use the global scope ~/.claude")
 	root.PersistentFlags().StringVarP(&f.project, "project", "p", "", "use the project at DIR (default: current directory)")
+	root.PersistentFlags().BoolVar(&f.noSync, "no-sync", false, "do not pull the repository before install, switch or setup")
 
 	root.Version = version
-	root.AddCommand(setupCmd(f), statusCmd(f), listCmd(f), installCmd(f), uninstallCmd(f), switchCmd(f), doctorCmd(f))
+	root.AddCommand(setupCmd(f), statusCmd(f), listCmd(f), installCmd(f), uninstallCmd(f), switchCmd(f),
+		updateCmd(f), hookCmd(f), doctorCmd(f))
 	styleHelp(root)
 
 	if err := root.Execute(); err != nil {
@@ -118,6 +163,7 @@ func statusCmd(f *flags) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			printRepoLine(cmd.OutOrStdout(), r, !f.noSync)
 			for _, s := range scopes {
 				st, err := r.Status(s)
 				if err != nil {
@@ -128,6 +174,117 @@ func statusCmd(f *flags) *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func updateCmd(f *flags) *cobra.Command {
+	var self, quiet bool
+	cmd := &cobra.Command{
+		Use:   "update",
+		Short: "Pull the repository from origin; with --self, also replace the ccfg binary",
+		Long: `Update fetches origin and fast-forwards the clone when the working tree is
+clean. Local changes or a diverged branch are reported, never overwritten.
+Because the scopes hold links into the clone, a pull updates every scope.
+
+With --self, it downloads the latest release for this platform, verifies the
+checksum and replaces the running binary.
+
+--quiet prints only changes and warnings; a SessionStart hook uses it.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			w := cmd.OutOrStdout()
+			r, err := f.load()
+			if err != nil {
+				return err
+			}
+			events, err := r.Update(60 * time.Second)
+			if errors.Is(err, ccfg.ErrNotGit) {
+				events = append(events, ccfg.Event{Level: ccfg.Warn, Verb: "skipped", Subject: "repository", Detail: r.Root + " is not a git clone"})
+				err = nil
+			}
+			if quiet {
+				events = withoutInfo(events)
+			}
+			printEvents(w, events)
+			if err != nil {
+				return err
+			}
+			if !self {
+				return nil
+			}
+			got, changed, err := ccfg.SelfUpdate(version, "")
+			if err != nil {
+				return fmt.Errorf("self-update: %w", err)
+			}
+			if changed {
+				fmt.Fprintf(w, "%s updated  %s  %s\n", icon(ccfg.OK), styAccent.Render("ccfg"), styDim.Render(version+" -> "+got))
+			} else if !quiet {
+				fmt.Fprintf(w, "%s current  %s  %s\n", icon(ccfg.Info), styAccent.Render("ccfg"), styDim.Render(got))
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&self, "self", false, "also update the ccfg binary to the latest release")
+	cmd.Flags().BoolVar(&quiet, "quiet", false, "print only changes and warnings")
+	return cmd
+}
+
+func hookCmd(f *flags) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "hook",
+		Short: "Manage the Claude Code SessionStart hook that syncs the repository",
+		Long: `The hook adds "ccfg update --quiet" to hooks.SessionStart in ~/.claude/settings.json.
+Each new Claude Code session then starts with the clone fast-forwarded to origin.
+Other settings and hooks are kept.`,
+	}
+	run := func(action string) func(*cobra.Command, []string) error {
+		return func(cmd *cobra.Command, _ []string) error {
+			g, err := ccfg.GlobalScope()
+			if err != nil {
+				return err
+			}
+			w := cmd.OutOrStdout()
+			switch action {
+			case "install":
+				exe, _ := os.Executable()
+				added, err := ccfg.InstallHook(g, exe)
+				if err != nil {
+					return err
+				}
+				if added {
+					fmt.Fprintf(w, "%s added SessionStart hook to %s\n", icon(ccfg.OK), styDim.Render(ccfg.SettingsPath(g)))
+				} else {
+					fmt.Fprintf(w, "%s hook already present in %s\n", icon(ccfg.Info), styDim.Render(ccfg.SettingsPath(g)))
+				}
+			case "remove":
+				removed, err := ccfg.RemoveHook(g)
+				if err != nil {
+					return err
+				}
+				if removed {
+					fmt.Fprintf(w, "%s removed the hook from %s\n", icon(ccfg.OK), styDim.Render(ccfg.SettingsPath(g)))
+				} else {
+					fmt.Fprintf(w, "%s no ccfg hook in %s\n", icon(ccfg.Info), styDim.Render(ccfg.SettingsPath(g)))
+				}
+			default:
+				installed, err := ccfg.HookInstalled(g)
+				if err != nil {
+					return err
+				}
+				if installed {
+					fmt.Fprintf(w, "%s SessionStart hook installed %s\n", icon(ccfg.OK), styDim.Render(ccfg.SettingsPath(g)))
+				} else {
+					fmt.Fprintf(w, "%s no hook; run `ccfg hook install`\n", icon(ccfg.Info))
+				}
+			}
+			return nil
+		}
+	}
+	cmd.AddCommand(
+		&cobra.Command{Use: "install", Short: "Add the hook", Args: cobra.NoArgs, RunE: run("install")},
+		&cobra.Command{Use: "remove", Short: "Remove the hook", Args: cobra.NoArgs, RunE: run("remove")},
+		&cobra.Command{Use: "status", Short: "Show whether the hook is present", Args: cobra.NoArgs, RunE: run("status")},
+	)
+	return cmd
 }
 
 func listCmd(f *flags) *cobra.Command {
@@ -170,6 +327,7 @@ Examples:
 			if err != nil {
 				return err
 			}
+			r = autoSync(f, r, cmd.OutOrStdout())
 			if len(names) == 0 {
 				names, err = pickNames(r, s)
 				if err != nil || len(names) == 0 {
@@ -230,6 +388,7 @@ func switchCmd(f *flags) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			r = autoSync(f, r, cmd.OutOrStdout())
 			name := ""
 			if len(args) == 1 {
 				name = args[0]

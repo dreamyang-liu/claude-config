@@ -83,7 +83,19 @@ engineering 的 7 个 skill 来自 SPROUT 仓库的 `.claude/skills/`。`researc
 | `ccfg install <名字>...` | 安装 profile 或单个 skill。无参数时交互选择。目标位置已有真实目录（不是链接）时，不做任何改动并列出它们：`--force` 把它们移到 `.claude/backups/` 再链接，`--keep` 跳过它们只链接其余的。 |
 | `ccfg uninstall <名字>...` | 卸载。另一个已装 profile 还在用的 skill 会保留。`--all` 清掉该作用域里指向本仓库的一切。 |
 | `ccfg switch <profile>` | 让该 profile 成为作用域里唯一的 profile。`common` 不受影响。无参数时交互选择。 |
+| `ccfg update` | `git fetch` 后在工作区干净、只落后不超前时 `git pull --ff-only`。有本地改动或分叉时只报告，不覆盖。`--self` 顺带把 `ccfg` 二进制换成最新 release。`--quiet` 只输出变化和警告。 |
+| `ccfg hook install\|remove\|status` | 管理 `~/.claude/settings.json` 里的 SessionStart hook（`ccfg update --quiet`）。装了之后每个 Claude Code 会话开始时自动同步仓库。其他设置和 hook 不动。 |
 | `ccfg doctor` | 找出坏链接、块外的 import 行、旧版 `install.sh` 留下的 `CLAUDE.md` 符号链接。`--fix` 修复。 |
+
+### 和 GitHub 同步
+
+skill 和 CLAUDE.md 都链接到本地克隆，所以克隆更新了，所有作用域立刻生效。`ccfg` 用三种方式让克隆跟上 origin：
+
+1. `install`、`switch`、`setup` 开始前自动 `ccfg update`（fetch 超时 8 秒，离线时提示后继续）。`--no-sync` 跳过。
+2. `ccfg status` 顶部显示克隆状态：和 origin 一致、落后 N 个 commit、有本地改动。
+3. SessionStart hook：`setup` 会问是否安装，或手动 `ccfg hook install`。每个会话开始时跑一次 `ccfg update --quiet`。
+
+更新只做 fast-forward。克隆里有未提交的改动或本地 commit 时，`ccfg` 报告并留给你处理，不会丢改动。
 
 仓库位置按这个顺序找：`--repo`、环境变量 `CLAUDE_CONFIG_REPO`、`~/.config/ccfg/repo` 里记录的路径、二进制文件所在的仓库、`~/Projects/claude-config`。
 
@@ -102,7 +114,7 @@ curl -fsSL https://raw.githubusercontent.com/dreamyang-liu/claude-config/main/in
 
 环境变量：`CLAUDE_CONFIG_REPO` 仓库位置，`CCFG_BIN_DIR` 二进制位置，`CCFG_VERSION` 指定版本，`CCFG_NO_SETUP=1` 只安装不进入 setup。
 
-`setup` 会问：是否全局安装 `common`、要不要配置一个项目、项目选哪些 profile 和额外 skill、是否改 `.gitignore`、是否把 `ccfg` 链接到 PATH 上的目录。
+`setup` 会问：是否全局安装 `common`、是否加每次会话自动同步的 hook、要不要配置一个项目、项目选哪些 profile 和额外 skill、已有的真实 skill 目录怎么处理、是否改 `.gitignore`、是否把 `ccfg` 链接到 PATH 上的目录。
 
 从源码构建：仓库里 `make build`（需要 Go），产物在 `bin/ccfg`。
 

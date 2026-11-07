@@ -20,6 +20,8 @@ import (
 type setupPlan struct {
 	repo          *ccfg.Repo
 	installCommon bool
+	hook          bool // add the SessionStart sync hook
+	hookPresent   bool
 	project       *ccfg.Scope
 	profiles      []string // non-common profiles the project should have
 	skills        []string // extra skills for the project
@@ -62,7 +64,7 @@ func runSetup(f *flags, w io.Writer, accessible bool) error {
 	if err != nil {
 		return err
 	}
-	plan.repo = repo
+	plan.repo = autoSync(f, repo, w)
 
 	if err := askGlobal(plan, form); err != nil {
 		return err
@@ -128,10 +130,26 @@ func askGlobal(plan *setupPlan, form formFunc) error {
 		desc += " The current ~/.claude/CLAUDE.md symlink becomes a regular file with an import block."
 	}
 	plan.installCommon = true
-	return form(huh.NewConfirm().
+	if err := form(huh.NewConfirm().
 		Title("Install the common layer globally (" + g.String() + ")?").
 		Description(desc).
-		Value(&plan.installCommon))
+		Value(&plan.installCommon)); err != nil {
+		return err
+	}
+	installed, err := ccfg.HookInstalled(g)
+	if err != nil {
+		return err
+	}
+	plan.hookPresent = installed
+	plan.hook = true
+	hookDesc := "Adds `ccfg update --quiet` to hooks.SessionStart in " + ccfg.SettingsPath(g) + ". Other settings stay."
+	if installed {
+		hookDesc = "The hook is already in " + ccfg.SettingsPath(g) + ". No keeps it; Yes keeps it too."
+	}
+	return form(huh.NewConfirm().
+		Title("Sync the repository at the start of each Claude Code session?").
+		Description(hookDesc).
+		Value(&plan.hook))
 }
 
 func askProject(plan *setupPlan, f *flags, form formFunc) error {
@@ -320,6 +338,14 @@ func printPlan(w io.Writer, plan *setupPlan) {
 	} else {
 		fmt.Fprintf(w, "  global       %s\n", styDim.Render("unchanged"))
 	}
+	switch {
+	case plan.hook && !plan.hookPresent:
+		fmt.Fprintf(w, "  sync hook    add %s\n", styDim.Render("SessionStart: ccfg update --quiet"))
+	case plan.hook:
+		fmt.Fprintf(w, "  sync hook    %s\n", styDim.Render("already installed"))
+	default:
+		fmt.Fprintf(w, "  sync hook    %s\n", styDim.Render("none"))
+	}
 	if plan.project != nil {
 		names := "none"
 		if len(plan.profiles) > 0 {
@@ -365,12 +391,24 @@ func applyPlan(w io.Writer, plan *setupPlan) error {
 			return err
 		}
 	}
+	ccfgPath, _ := os.Executable()
 	if plan.pathLink != "" {
 		if err := linkBinary(plan.pathLink); err != nil {
 			fmt.Fprintf(w, "%s PATH link failed: %v\n", icon(ccfg.Warn), err)
 		} else {
 			fmt.Fprintf(w, "%s linked %s\n", icon(ccfg.OK), styAccent.Render(plan.pathLink))
+			ccfgPath = plan.pathLink
 		}
+	}
+	if plan.hook && !plan.hookPresent {
+		g, err := ccfg.GlobalScope()
+		if err != nil {
+			return err
+		}
+		if _, err := ccfg.InstallHook(g, ccfgPath); err != nil {
+			return err
+		}
+		fmt.Fprintf(w, "%s added %s\n", icon(ccfg.OK), styAccent.Render("SessionStart sync hook"))
 	}
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, styDim.Render("done. `ccfg status` shows the result; a new Claude Code session reads the new CLAUDE.md."))

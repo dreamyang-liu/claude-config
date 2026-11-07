@@ -1,10 +1,12 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
@@ -77,6 +79,44 @@ func newTable(headers ...string) *table.Table {
 			return styCell
 		}).
 		Headers(headers...)
+}
+
+// printRepoLine writes one line about the clone: branch, head, and whether it
+// matches origin. With fetch set, it fetches first with a short timeout.
+func printRepoLine(w io.Writer, r *ccfg.Repo, fetch bool) {
+	home, _ := os.UserHomeDir()
+	fmt.Fprintf(w, "%s %s", styTitle.Render("repository"), styDim.Render(tildify(home, r.Root)))
+	fetched := false
+	if fetch {
+		fetched = r.Fetch(3*time.Second) == nil
+	}
+	st, err := r.State()
+	switch {
+	case errors.Is(err, ccfg.ErrNotGit):
+		fmt.Fprintf(w, "  %s\n\n", styDim.Render("(not a git clone)"))
+		return
+	case err != nil:
+		fmt.Fprintf(w, "  %s %v\n\n", icon(ccfg.Warn), err)
+		return
+	}
+	fmt.Fprintf(w, "  %s", styDim.Render(st.Branch+" "+st.Head))
+	switch {
+	case st.Behind > 0 && st.Ahead > 0:
+		fmt.Fprintf(w, "  %s diverged: %d local, %d remote", icon(ccfg.Warn), st.Ahead, st.Behind)
+	case st.Behind > 0:
+		fmt.Fprintf(w, "  %s behind origin by %d %s", icon(ccfg.Warn), st.Behind, styDim.Render("(ccfg update)"))
+	case st.Ahead > 0:
+		fmt.Fprintf(w, "  %s ahead of origin by %d", icon(ccfg.Info), st.Ahead)
+	case fetched:
+		fmt.Fprintf(w, "  %s matches origin", icon(ccfg.OK))
+	default:
+		fmt.Fprintf(w, "  %s", styDim.Render("matches last fetch (offline)"))
+	}
+	if st.Dirty {
+		fmt.Fprintf(w, "  %s local changes", icon(ccfg.Warn))
+	}
+	fmt.Fprintln(w)
+	fmt.Fprintln(w)
 }
 
 // printStatus writes the profile table of one scope and its warnings.
