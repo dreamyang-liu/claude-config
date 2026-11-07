@@ -62,11 +62,9 @@ func repoCandidates(explicit string) []string {
 	if env := os.Getenv("CLAUDE_CONFIG_REPO"); env != "" {
 		out = append(out, env)
 	}
-	if conf, err := os.UserConfigDir(); err == nil {
-		if data, err := os.ReadFile(filepath.Join(conf, "ccfg", "repo")); err == nil {
-			if p := strings.TrimSpace(string(data)); p != "" {
-				out = append(out, p)
-			}
+	if data, err := os.ReadFile(filepath.Join(configDir(), "ccfg", "repo")); err == nil {
+		if p := strings.TrimSpace(string(data)); p != "" {
+			out = append(out, p)
 		}
 	}
 	if exe, err := os.Executable(); err == nil {
@@ -83,6 +81,20 @@ func repoCandidates(explicit string) []string {
 		out = append(out, filepath.Join(home, "Projects", "claude-config"))
 	}
 	return out
+}
+
+// configDir is $XDG_CONFIG_HOME or ~/.config on every platform, the same
+// place that install.sh writes. It is not os.UserConfigDir, which is
+// ~/Library/Application Support on macOS.
+func configDir() string {
+	if x := os.Getenv("XDG_CONFIG_HOME"); x != "" {
+		return x
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".config")
 }
 
 func isRepo(dir string) bool {
