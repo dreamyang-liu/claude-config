@@ -17,7 +17,7 @@ func gitRepoPair(t *testing.T) (*Repo, string) {
 	origin := filepath.Join(root, "origin.git")
 	work := filepath.Join(root, "work")
 	clone := filepath.Join(root, "clone")
-	run(t, "", "git", "init", "-q", "--bare", origin)
+	run(t, "", "git", "init", "-q", "--bare", "--initial-branch=main", origin)
 	run(t, "", "git", "init", "-q", "-b", "main", work)
 	writeFile(t, filepath.Join(work, "CLAUDE.md"), "# common\n")
 	mkSkill(t, filepath.Join(work, "skills", "nasa"), "NASA")
@@ -26,7 +26,7 @@ func gitRepoPair(t *testing.T) (*Repo, string) {
 	gitCommit(t, work, "initial")
 	run(t, work, "git", "remote", "add", "origin", origin)
 	run(t, work, "git", "push", "-q", "-u", "origin", "main")
-	run(t, "", "git", "clone", "-q", origin, clone)
+	run(t, "", "git", "clone", "-q", "-b", "main", origin, clone)
 	r, err := LoadRepo(clone)
 	if err != nil {
 		t.Fatal(err)
