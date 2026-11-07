@@ -1,8 +1,8 @@
 #!/bin/sh
-# Bootstrap on a new machine: build ccfg and install the common layer into
-# ~/.claude. Needs Go (brew install go). After this, use bin/ccfg directly:
-#   bin/ccfg install engineering -p <project>
-#   bin/ccfg status
+# Bootstrap on a new machine: build ccfg and run its interactive setup, which
+# installs the common layer into ~/.claude, configures one project, and offers
+# to put ccfg on your PATH. Needs Go (brew install go).
+# Pass arguments to forward them to `ccfg setup`, for example --accessible.
 set -eu
 
 REPO=$(cd "$(dirname "$0")" && pwd)
@@ -15,7 +15,4 @@ fi
 
 go build -o bin/ccfg ./cmd/ccfg
 echo "built $REPO/bin/ccfg"
-bin/ccfg install common --global "$@"
-echo
-echo "Put ccfg on your PATH, for example:"
-echo "  ln -s $REPO/bin/ccfg /usr/local/bin/ccfg"
+exec bin/ccfg setup "$@"

@@ -77,6 +77,7 @@ engineering 的 7 个 skill 来自 SPROUT 仓库的 `.claude/skills/`。`researc
 
 | 命令 | 作用 |
 |---|---|
+| `ccfg setup` | 交互式配置：仓库位置、全局 `common`、一个项目的 profile 和额外 skill、`.gitignore`、把 `ccfg` 链接到 PATH。最后显示计划，确认后才改动。`--accessible` 用纯文本提示。 |
 | `ccfg status` | 每个作用域装了哪些 profile 和 skill。无 `-g`/`-p` 时同时显示全局和当前项目。 |
 | `ccfg list` | 仓库提供的 profile 和 skill，带描述。`-v` 显示完整描述。 |
 | `ccfg install <名字>...` | 安装 profile 或单个 skill。无参数时交互选择。`--force` 把占位的真实文件移到备份目录。 |
@@ -91,9 +92,10 @@ engineering 的 7 个 skill 来自 SPROUT 仓库的 `.claude/skills/`。`researc
 ```bash
 brew install go
 git clone https://github.com/dreamyang-liu/claude-config ~/Projects/claude-config
-~/Projects/claude-config/install.sh          # 构建 bin/ccfg，然后 ccfg install common --global
-ln -s ~/Projects/claude-config/bin/ccfg /usr/local/bin/ccfg
+~/Projects/claude-config/install.sh          # 构建 bin/ccfg，然后运行 ccfg setup
 ```
+
+`setup` 会问：是否全局安装 `common`、要不要配置一个项目、项目选哪些 profile 和额外 skill、是否改 `.gitignore`、是否把 `ccfg` 链接到 PATH 上的目录。
 
 ### 每个项目
 

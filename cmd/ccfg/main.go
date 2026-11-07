@@ -36,7 +36,9 @@ A scope is the global ~/.claude directory (--global) or one project
 
 A profile is a CLAUDE.md fragment plus skills: "common" is the repository
 root (always wanted globally), and each directory under profiles/ is one
-project type. A skill can also be installed on its own.`,
+project type. A skill can also be installed on its own.
+
+New here? Run "ccfg setup" for a guided walk-through.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
@@ -45,7 +47,7 @@ project type. A skill can also be installed on its own.`,
 	root.PersistentFlags().StringVarP(&f.project, "project", "p", "", "use the project at DIR (default: current directory)")
 
 	root.Version = version
-	root.AddCommand(statusCmd(f), listCmd(f), installCmd(f), uninstallCmd(f), switchCmd(f), doctorCmd(f))
+	root.AddCommand(setupCmd(f), statusCmd(f), listCmd(f), installCmd(f), uninstallCmd(f), switchCmd(f), doctorCmd(f))
 	styleHelp(root)
 
 	if err := root.Execute(); err != nil {
